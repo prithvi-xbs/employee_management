@@ -12,6 +12,8 @@ import lombok.Data;
 
 @Data
 public class EmployeeRequestDto {
+	
+	private String id;
 
 	@NotBlank(message = Constants.IS_MANDATORY)
 	private String name;

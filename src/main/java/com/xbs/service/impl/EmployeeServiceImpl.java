@@ -19,8 +19,8 @@ import org.springframework.web.server.ResponseStatusException;
 import com.xbs.entity.Address;
 import com.xbs.entity.Employees;
 import com.xbs.enums.AddressType;
-import com.xbs.repository.EmployeeAddressProjection;
-import com.xbs.repository.EmployeeAddressRepository;
+import com.xbs.projection.EmployeeAddressProjection;
+import com.xbs.repository.AddressRepository;
 import com.xbs.repository.EmployeeRepository;
 import com.xbs.request.dto.EmployeeAddressRequestDto;
 import com.xbs.request.dto.EmployeeRequestDto;
@@ -41,8 +41,13 @@ public class EmployeeServiceImpl implements EmployeeService {
 	private EmployeeRepository employeeRepository;
 
 	@Autowired
-	private EmployeeAddressRepository addressRepository;
+	private AddressRepository addressRepository;
 
+	/**
+	 * create an employee
+	 * 
+	 * @param request
+	 */
 	@Override
 	@Transactional
 	public EmployeeResponseDto createEmployee(EmployeeRequestDto request) {
@@ -54,11 +59,11 @@ public class EmployeeServiceImpl implements EmployeeService {
 			EmployeeResponseDto response = new EmployeeResponseDto();
 			List<EmployeeAddressResponseDto> addressList = new ArrayList<>();
 			Employees employee = modelMapper.map(request, Employees.class);
-//			employee.setActive(true);
-//			employee.setDeleted(false);
+			employee.setActive(request.isActive());
 			employee = employeeRepository.save(employee);
 			if (!StringUtils.isEmpty(employee.getId())) {
-				createOrUpdateEmployee(employee.getId(), request, addressList, employee);
+				request.setId(employee.getId());
+				createOrUpdateEmployee(request, addressList, employee);
 				if (!CollectionUtils.isEmpty(addressList)) {
 					response = modelMapper.map(employee, EmployeeResponseDto.class);
 					response.setAddress(addressList);
@@ -71,17 +76,24 @@ public class EmployeeServiceImpl implements EmployeeService {
 		}
 	}
 
+	/**
+	 * Update an Employee using Id
+	 * 
+	 * @param request
+	 */
 	@Override
 	@Transactional
-	public EmployeeResponseDto updateEmployee(String id, EmployeeRequestDto request) {
-		if (!employeeRepository.existsById(id))
+	public EmployeeResponseDto updateEmployee(EmployeeRequestDto request) {
+		String employeeId = request.getId();
+		if (!employeeRepository.existsById(employeeId))
 			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No such Employee Id found");
 
-		if (employeeRepository.existsByEmailAndIdNot(request.getEmail(), id))
+		if (employeeRepository.existsByEmailAndIdNot(request.getEmail(), employeeId))
 			throw new ResponseStatusException(HttpStatus.CONFLICT, "Record already exists with same details");
 
 		request.getAddress().forEach(address -> {
-			if (addressRepository.existsByEmployeeIdAndAddressType(id, AddressType.valueOf(address.getAddressType())))
+			if (addressRepository.existsByEmployeeIdAndAddressTypeAndIdNot(employeeId,
+					AddressType.valueOf(address.getAddressType()), address.getId()))
 				throw new ResponseStatusException(HttpStatus.CONFLICT, "Record already exists with same Address Type");
 			if (!EnumUtils.isValidEnum(AddressType.class, AddressType.valueOf(address.getAddressType()).toString()))
 				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No such Address Type present");
@@ -89,13 +101,12 @@ public class EmployeeServiceImpl implements EmployeeService {
 		try {
 			EmployeeResponseDto response = new EmployeeResponseDto();
 			List<EmployeeAddressResponseDto> addressList = new ArrayList<>();
-			Employees employee = employeeRepository.getReferenceById(id);
+			Employees employee = employeeRepository.getReferenceById(employeeId);
 			modelMapper.map(request, Employees.class);
-//			employee.setActive(true);
-//			employee.setDeleted(false);
+			employee.setActive(request.isActive());
 			employee = employeeRepository.save(employee);
 			if (!StringUtils.isEmpty(employee.getId())) {
-				createOrUpdateEmployee(id, request, addressList, employee);
+				createOrUpdateEmployee(request, addressList, employee);
 				if (!CollectionUtils.isEmpty(addressList)) {
 					response = modelMapper.map(employee, EmployeeResponseDto.class);
 					response.setAddress(addressList);
@@ -109,16 +120,17 @@ public class EmployeeServiceImpl implements EmployeeService {
 	}
 
 	/**
-	 * @param id
+	 * Method used to create or update an employee
+	 * 
 	 * @param request
 	 * @param addressList
 	 * @param employee
 	 */
-	private void createOrUpdateEmployee(String id, EmployeeRequestDto request,
-			List<EmployeeAddressResponseDto> addressList, Employees employee) {
+	private void createOrUpdateEmployee(EmployeeRequestDto request, List<EmployeeAddressResponseDto> addressList,
+			Employees employee) {
 		for (EmployeeAddressRequestDto address : request.getAddress()) {
-			if (addressRepository.existsByEmployeeIdAndAddressTypeAndDeletedFalse(id,
-					AddressType.valueOf(address.getAddressType()))) {
+			if (address.getId() != null && !address.getId().isBlank()
+					&& addressRepository.existsByEmployeeIdAndIdAndDeletedFalse(request.getId(), address.getId())) {
 				Address empAddress = addressRepository.getReferenceById(address.getId());
 				empAddress.setEmployee(employee);
 				empAddress.setAddressType(AddressType.valueOf(address.getAddressType()));
@@ -126,8 +138,7 @@ public class EmployeeServiceImpl implements EmployeeService {
 				empAddress.setPincode(address.getPincode());
 				empAddress.setDistrict(address.getDistrict());
 				empAddress.setState(address.getState());
-//				empAddress.setActive(true);
-//				empAddress.setDeleted(false);
+				empAddress.setActive(address.isActive());
 				empAddress = addressRepository.save(empAddress);
 				if (!StringUtils.isBlank(empAddress.getId())) {
 					EmployeeAddressResponseDto addressResponse = modelMapper.map(empAddress,
@@ -142,8 +153,7 @@ public class EmployeeServiceImpl implements EmployeeService {
 				empAddress.setPincode(address.getPincode());
 				empAddress.setDistrict(address.getDistrict());
 				empAddress.setState(address.getState());
-//				empAddress.setActive(true);
-//				empAddress.setDeleted(false);
+				empAddress.setActive(address.isActive());
 				empAddress = addressRepository.save(empAddress);
 				if (!StringUtils.isBlank(empAddress.getId())) {
 					EmployeeAddressResponseDto addressResponse = modelMapper.map(empAddress,
@@ -154,6 +164,11 @@ public class EmployeeServiceImpl implements EmployeeService {
 		}
 	}
 
+	/**
+	 * Get employee by Id
+	 * 
+	 * @param id
+	 */
 	@Override
 	public EmployeeResponseDto getEmployeeById(String id) {
 
@@ -162,7 +177,7 @@ public class EmployeeServiceImpl implements EmployeeService {
 
 		try {
 			EmployeeResponseDto response = employeeRepository.findByEmployeeId(id);
-			List<EmployeeAddressProjection> addressProjection = addressRepository.findAddressListByEmpId(id);
+			List<EmployeeAddressProjection> addressProjection = addressRepository.getByEmployeeIdAndDeleted(id, false);
 			List<EmployeeAddressResponseDto> addressResponseList = new ArrayList<>();
 			if (!CollectionUtils.isEmpty(addressProjection)) {
 				addressProjection
@@ -176,6 +191,9 @@ public class EmployeeServiceImpl implements EmployeeService {
 		}
 	}
 
+	/**
+	 * Get all the employees list without employee Details
+	 */
 	@Override
 	public List<EmployeeResponseDto> getAllEmployeesList() {
 		try {
@@ -183,16 +201,8 @@ public class EmployeeServiceImpl implements EmployeeService {
 			CopyOnWriteArrayList<EmployeeResponseDto> responseDto = employeeRepository.findAllEmployees();
 			if (!CollectionUtils.isEmpty(responseDto)) {
 				responseDto.forEach(empResponse -> {
-					List<EmployeeAddressProjection> addressProjection = addressRepository
-							.findAddressListByEmpId(empResponse.getId());
 					Employees employees = employeeRepository.getReferenceById(empResponse.getId());
 					modelMapper.map(employees, EmployeeResponseDto.class);
-					List<EmployeeAddressResponseDto> addressResponseList = new ArrayList<>();
-					if (!CollectionUtils.isEmpty(addressProjection)) {
-						addressProjection.forEach(
-								projection -> addressResponseList.add(new EmployeeAddressResponseDto(projection)));
-						empResponse.setAddress(addressResponseList);
-					}
 					response.add(empResponse);
 				});
 			}
@@ -203,6 +213,11 @@ public class EmployeeServiceImpl implements EmployeeService {
 		}
 	}
 
+	/**
+	 * Mark Employee as deleted by id
+	 * 
+	 * @param id
+	 */
 	@Override
 	@Transactional
 	public Boolean deleteEmployeeById(String id) {

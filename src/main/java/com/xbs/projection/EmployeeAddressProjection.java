@@ -1,4 +1,4 @@
-package com.xbs.repository;
+package com.xbs.projection;
 
 public interface EmployeeAddressProjection {
 

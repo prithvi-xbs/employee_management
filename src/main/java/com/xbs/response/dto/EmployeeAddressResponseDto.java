@@ -1,8 +1,6 @@
 package com.xbs.response.dto;
 
-import java.util.List;
-
-import com.xbs.repository.EmployeeAddressProjection;
+import com.xbs.projection.EmployeeAddressProjection;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

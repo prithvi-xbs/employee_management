@@ -9,17 +9,14 @@ import org.springframework.stereotype.Repository;
 
 import com.xbs.entity.Address;
 import com.xbs.enums.AddressType;
+import com.xbs.projection.EmployeeAddressProjection;
 
 @Repository
-public interface EmployeeAddressRepository extends JpaRepository<Address, String> {
+public interface AddressRepository extends JpaRepository<Address, String> {
 
 	boolean existsByEmployeeIdAndAddressType(String id, AddressType addressType);
 
-	@Query("SELECT ea.id AS id, ea.addressType AS addressType, ea.addressLine AS addressLine, ea.pincode AS pincode, "
-			+ "ea.district AS district, ea.state AS state, ea.active AS active "
-			+ "FROM #{#entityName} ea "
-			+ "WHERE ea.deleted=false AND ea.employee.id=:empId ")
-	List<EmployeeAddressProjection> findAddressListByEmpId(String empId);
+	List<EmployeeAddressProjection> getByEmployeeIdAndDeleted(String employeeId, boolean isDeleted);
 
 	boolean existsByAddressType(AddressType addressType);
 
@@ -30,5 +27,9 @@ public interface EmployeeAddressRepository extends JpaRepository<Address, String
 	void deleteByEmployeeId(String id);
 
 	boolean existsByEmployeeIdAndAddressTypeAndDeletedFalse(String id, AddressType addressType);
+
+	boolean existsByEmployeeIdAndIdAndDeletedFalse(String employeeId, String id);
+
+	boolean existsByEmployeeIdAndAddressTypeAndIdNot(String employeeId, AddressType addressType, String id);
 
 }
